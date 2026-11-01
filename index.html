@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="spis-wersja" content="2026-11-01.1730">
+<meta name="spis-wersja" content="2026-11-01.1909">
 <meta name="theme-color" content="#0B0F0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -370,6 +370,41 @@ button.postep{border:1px solid var(--ramka);background:var(--pow);color:var(--te
 .alert.cicho{border-color:var(--ramka);background:var(--pow);color:var(--tekst2)}
 @media (max-width:760px){.nowa-w{padding:0 8px}.chip-proba{display:none}}
 a.drugi{text-decoration:none;color:var(--tekst)}
+
+/* ===== konta spisu (kierownik) ===== */
+.kn-w{width:min(1200px,100%);margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:16px}
+.kn-siatka{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:start}
+.kn-nowe .glowny{width:100%}
+.kn-role{display:flex;flex-direction:column;gap:10px}
+.kn-rg{display:flex;flex-direction:column;gap:6px}
+.kn-rr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kn-r{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 10px 6px 0;border-radius:12px;border:1px solid var(--ramka);background:var(--pow2);font-size:15px;font-weight:700;text-align:left;overflow:hidden;line-height:1.2}
+.kn-r .pas{align-self:stretch;width:6px;flex:0 0 6px;background:var(--kol)}
+.kn-r.wyb{border-color:var(--kol);box-shadow:0 0 0 2px var(--kol);background:var(--pow)}
+.kn-pin{display:flex;gap:8px;align-items:stretch}
+.kn-pin .pole{flex:1;min-width:0;font-variant-numeric:tabular-nums;letter-spacing:.14em}
+.kn-dane{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 16px;align-items:baseline;padding:14px 16px;border-radius:14px;border:1px solid var(--okRamka);background:var(--okTlo)}
+.kn-dane b{font-size:17px;overflow-wrap:anywhere}
+.kn-duze{font-size:30px!important;font-weight:800;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.kn-lnag{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.kn-lista{display:flex;flex-direction:column;gap:14px}
+.kn-grupa{display:flex;flex-direction:column;gap:6px}
+.kn-gnag{display:flex;align-items:center;gap:8px;font-size:14px}
+.kn-gnag span:last-child{margin-left:auto;font-size:13px;color:var(--tekst3)}
+.kn-kw{width:10px;height:10px;border-radius:3px;background:var(--kol);flex:0 0 auto}
+.kn-osoba{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:8px 12px;border-radius:12px;border:1px solid var(--ramka);background:var(--pow2);text-align:left}
+.kn-osoba .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.kn-osoba b{font-size:15px}
+.kn-osoba small{font-size:12px;color:var(--tekst2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kn-osoba.zabl{opacity:.65}
+.kn-zmien{font-size:13px;font-weight:700;color:var(--mocTekst);flex:0 0 auto}
+.kn-sek{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--linia)}
+.kn-sek h3{margin:0;font-size:15px;font-weight:800}
+.kn-sek .drugi{align-self:flex-start}
+@media (max-width:960px){.kn-siatka{grid-template-columns:1fr}}
+@media (max-width:520px){.kn-rr{grid-template-columns:repeat(2,minmax(0,1fr))}.kn-duze{font-size:26px!important}}
+.ark-konto .ark-tresc>*{flex-shrink:0}
+.ark-konto .ark-tresc>.glowny{width:100%}
 </style>
 </head>
 <body>
@@ -383,7 +418,8 @@ a.drugi{text-decoration:none;color:var(--tekst)}
 
 // ============================================================
 // SPIS — inwentaryzacja dzienna (magazyn.dysza.app)
-// Konta, PIN-y i role z Tablicy Mocy (ta sama baza Supabase). Wpisy idą od razu do bazy przez kolejkę
+// Ta sama baza Supabase co Tablica Mocy. Konta spisu (jedna rola na konto) zakłada kierownik w „Konta spisu”;
+// kierownik i szef zmiany liczą kontem z Tablicy (wszystkie role). Wpisy idą od razu do bazy przez kolejkę
 // na urządzeniu (brak sieci w chłodni niczego nie gubi). Plik dnia, maile i RW robi automat (Inwentaryzacja 3.4).
 // ============================================================
 var KONF = window.__SPIS_KONFIG__ || {};
@@ -500,9 +536,28 @@ function Baza(url, klucz) {
     }
     return j;
   }
+  // funkcja brzegowa (np. spis-konta): odpowiedź { blad } → wyjątek z tym komunikatem
+  async function funkcja(nazwa, body, ponow) {
+    var tk = await token();
+    var r = await siec(url + '/functions/v1/' + nazwa, {
+      method: 'POST', cache: 'no-store',
+      headers: { apikey: klucz, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    if (r.status === 401 && ponow !== false) { await odswiez(); return funkcja(nazwa, body, false); }
+    var tx = await r.text(), j = null; try { j = tx ? JSON.parse(tx) : null; } catch (e) { }
+    if (!r.ok) {
+      var b = new Error((j && (j.blad || j.message || j.msg)) || ('Błąd funkcji (' + r.status + ').'));
+      b.status = r.status; if (r.status === 401) b.sesja = true;
+      if (r.status >= 500 && !(j && j.blad)) b.siec = true;
+      throw b;
+    }
+    return j;
+  }
   return {
     sesja: function () { return sesja; }, naSesje: function (f) { sluch.push(f); },
-    zaloguj: zaloguj, wyloguj: wyloguj, rpc: function (n, a) { return rest('rpc/' + n, { metoda: 'POST', body: a || {} }); }
+    zaloguj: zaloguj, wyloguj: wyloguj, rpc: function (n, a) { return rest('rpc/' + n, { metoda: 'POST', body: a || {} }); },
+    funkcja: funkcja
   };
 }
 var baza = Baza(URL_BAZY, KLUCZ_API);
@@ -518,7 +573,7 @@ function osobyUrz() {
 }
 function zapamietajOsobe(ja) {
   var n = osobyUrz().filter(function (o) { return o.login !== ja.login; });
-  n.unshift({ login: ja.login, imie: ja.imie || ja.login, rola: ja.rola || '', dl: dlPin(ja.rola), jezyk: ja.jezyk || 'pl', ostatnio: Date.now() });
+  n.unshift({ login: ja.login, imie: ja.imie || ja.login, rola: ja.rola || '', rs: ja.rola === 'spis' ? ja.rola_spisu || null : null, dl: dlPin(ja.rola), jezyk: ja.jezyk || 'pl', ostatnio: Date.now() });
   pisz(KL.osoby, n.slice(0, 40));
 }
 function usunOsobe(login) { pisz(KL.osoby, osobyUrz().filter(function (o) { return o.login !== login; })); }
@@ -543,6 +598,40 @@ var KOL_ROL = ['FQ', 'FP', 'FO', 'RQ', 'RP', 'RK', 'MG'];
 var ROLE_ZALOGI = ['FQ', 'FP', 'FO', 'RQ', 'RP', 'RK'];
 var KONTA = { kierownik: 'Kierownik', szef: 'Szef zmiany', kuchnia: 'Kuchnia', obsluga: 'Obsługa zamówień', ekran: 'Kokpit' };
 var KONTA_UA = { kierownik: 'Керівник', szef: 'Старший зміни', kuchnia: 'Кухня', obsluga: 'Обслуговування замовлень', ekran: 'Кокпіт' };
+var GRUPY_ROL = [['F', 'Fabryka'], ['R', 'Restauracja'], ['M', 'Magazyn']];
+
+// Kto liczy co: kierownik i szef zmiany (Tablica) — wszystkie role; konto spisu — tylko swoją; reszta — nic.
+// Baza sprawdza to samo przy każdym zapisie (spis_sprawdz_role) — ekran tylko nie pokazuje cudzych ról.
+function roleKonta(ja) {
+  ja = ja || S.ja; if (!ja) return [];
+  if (Array.isArray(ja.role_spisu)) return ja.role_spisu.filter(function (r) { return !!ROLE[r]; });
+  if (ja.rola === 'spis') return ja.rola_spisu && ROLE[ja.rola_spisu] ? [ja.rola_spisu] : [];
+  return ja.rola === 'kierownik' || ja.rola === 'szef' ? KOL_ROL.slice() : [];
+}
+function jednaRola() { return roleKonta().length === 1; }
+function opisKonta(ja, l) { return ja.rola === 'spis' && ROLE[ja.rola_spisu] ? nazwaRoli(ja.rola_spisu, l) : ((l === 'ua' ? KONTA_UA : KONTA)[ja.rola] || ja.rola || ''); }
+
+// Reguły kont spisu — jak w funkcji spis-konta (funkcja/spis-konta/reguly.js)
+var PL_ZN = { 'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z' };
+function loginZImienia(imie) {
+  return String(imie || '').toLowerCase().replace(/[ąćęłńóśźż]/g, function (c) { return PL_ZN[c]; })
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 30);
+}
+function bladPinu(pin) {
+  var p = String(pin || '');
+  if (!/^\d+$/.test(p) || p.length !== 6) return 'PIN to 6 cyfr.';
+  if (/^(\d)\1+$/.test(p)) return 'Za prosty PIN (same takie cyfry) — wylosuj albo wymyśl inny.';
+  if ('01234567890123456789'.indexOf(p) >= 0 || '98765432109876543210'.indexOf(p) >= 0) return 'Za prosty PIN (kolejne cyfry) — wylosuj albo wymyśl inny.';
+  return null;
+}
+function losujPin() {
+  var b = new Uint8Array(12);
+  for (;;) {
+    var p = '';
+    while (p.length < 6) { crypto.getRandomValues(b); for (var i = 0; i < b.length && p.length < 6; i++) if (b[i] < 250) p += String(b[i] % 10); }
+    if (!bladPinu(p)) return p;
+  }
+}
 var DNI = ['poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela'];
 var DNI_UA = ['понеділок', 'вівторок', 'середа', 'четвер', 'п’ятниця', 'субота', 'неділя'];
 var DNI_KR = ['pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.', 'niedz.'];
@@ -646,7 +735,10 @@ var TX = {
     wylogujKolejka: function (n) { return 'Na iPadzie czeka ' + n + ' ' + lpPl(n, 'wpis', 'wpisy', 'wpisów') + ' do wysłania. Poczekaj chwilę na sieć — po wylogowaniu wyjdą dopiero, gdy znowu się zalogujesz.'; },
     wylogujMimo: 'Wyloguj mimo to', czekam: 'Czekam na sieć',
     nowaWersja: 'Nowa wersja', odswiezApp: 'Odśwież aplikację', urzadzenie: 'Nazwa tego iPada', urzadzeniePodp: 'np. iPad w chłodni — widać ją przy wpisach',
-    zmienOsobe: 'Zmień osobę', spisDnia: 'Spis dnia', liczeSam: 'Liczę sam', wersja: 'Wersja'
+    zmienOsobe: 'Zmień osobę', spisDnia: 'Spis dnia', liczeSam: 'Liczę sam', wersja: 'Wersja',
+    twojaRola: 'Twoja rola', twojaRolaPod: 'To konto liczy tylko tę rolę. Inna rola to inne konto — u kierownika.', nowyDzien: 'Nowy dzień',
+    bInnaRola: function (r) { return 'To konto liczy tylko ' + (r ? 'rolę: ' + r : 'swoją rolę') + ' — wpis pominięty.'; },
+    rolaZmieniona: function (r) { return 'Kierownik zmienił Twoją rolę — teraz liczysz: ' + r + '.'; }
   },
   ua: {
     jakoKto: 'Яку роль рахуєте сьогодні?', jakoKtoPod: 'Пропонується ваша остання роль — ролі змінюються, тому вибір щоразу.',
@@ -694,7 +786,10 @@ var TX = {
     wylogujKolejka: function (n) { return 'На iPad чекає ' + n + ' ' + lpUa(n, 'запис', 'записи', 'записів') + ' на надсилання. Зачекайте на мережу — після виходу вони підуть лише тоді, коли ви знову увійдете.'; },
     wylogujMimo: 'Все одно вийти', czekam: 'Чекаю на мережу',
     nowaWersja: 'Нова версія', odswiezApp: 'Оновити застосунок', urzadzenie: 'Назва цього iPad', urzadzeniePodp: 'напр. iPad у холодильній камері — видно біля записів',
-    zmienOsobe: 'Змінити особу', spisDnia: 'Spis dnia', liczeSam: 'Рахую сам', wersja: 'Версія'
+    zmienOsobe: 'Змінити особу', spisDnia: 'Spis dnia', liczeSam: 'Рахую сам', wersja: 'Версія',
+    twojaRola: 'Ваша роль', twojaRolaPod: 'Цей обліковий запис рахує лише цю роль. Інша роль — інший обліковий запис, у керівника.', nowyDzien: 'Новий день',
+    bInnaRola: function (r) { return 'Цей обліковий запис рахує лише ' + (r ? 'роль: ' + r : 'свою роль') + ' — запис пропущено.'; },
+    rolaZmieniona: function (r) { return 'Керівник змінив вашу роль — тепер ви рахуєте: ' + r + '.'; }
   }
 };
 
@@ -743,7 +838,7 @@ var S = {
   wybRola: null, rola: null, idx: 0, buf: '', ostrz: null,
   w: {}, hist: null, wysLok: {}, bezHist: false,
   stan: null, dw: null, histRol: {}, histTow: null,
-  warstwa: null, stos: [], uwagi: '', szukaj: '',
+  warstwa: null, stos: [], uwagi: '', szukaj: '', kn: null,
   offline: false, wysyla: false, nowaWersja: false, motyw: czytaj(KL.motyw, 'ciemny') === 'jasny' ? 'jasny' : 'ciemny'
 };
 function L() { return S.ja && S.ja.jezyk === 'ua' ? 'ua' : 'pl'; }
@@ -804,6 +899,7 @@ function tekstBledu(e) {
   if (/DZIEN_ZAMKNIETY/.test(m)) return T.bDzien;
   if (/ZLA_POZYCJA|ZLA_ROLA/.test(m)) return T.bPozycja;
   if (/ZLA_ILOSC/.test(m)) return T.bIlosc;
+  var ir = m.match(/INNA_ROLA:?(\w*)/); if (ir) return T.bInnaRola(ir[1] && ROLE[ir[1]] ? nazwaRoli(ir[1], L()) : '');
   if (/BRAK_DOSTEPU/.test(m) || (e && e.kod === '42501')) return T.bDostep;
   var p = m.match(/PUSTE_POLA:(\d+)/); if (p) return T.bPuste(+p[1]);
   return T.bInny(m);
@@ -834,10 +930,11 @@ function poWyslaniu(el, wynik, blad) {
       }
     }
   }
-  if (blad && /BRAK_DOSTEPU/.test(String(blad.message))) zaladujJa();
+  if (blad && /BRAK_DOSTEPU|INNA_ROLA/.test(String(blad.message))) zaladujJa();
 }
 function sesjaWygasla() {
   if (S.ekran === 'start') return;
+  S.kn = null;
   S.ekran = 'start'; S.krok = 'pin'; S.pinOsoba = S.ja ? { login: S.ja.login, imie: S.ja.imie, dl: dlPin(S.ja.rola) } : null;
   if (!S.pinOsoba) S.krok = osobyUrz().length ? 'kto' : 'login';
   S.pin = ''; S.pinBlad = 'Sesja wygasła — wpisz PIN jeszcze raz. Wpisy na iPadzie czekają.'; S.warstwa = null; rysuj();
@@ -857,9 +954,16 @@ async function zaladujJa() {
   try {
     var ja = await baza.rpc('spis_ja', {});
     if (!ja || !ja.aktywny || !ja.rola) { S.konto = 'zablokowane'; S.ekran = 'konto'; rysuj(); return null; }
+    var bylaRola = S.rola;
     ustawJa(ja);
     if (ja.rola === 'ekran') { S.konto = 'ekran'; S.ekran = 'konto'; rysuj(); return null; }
+    if (!roleKonta(ja).length) { S.konto = 'bezSpisu'; S.ekran = 'konto'; rysuj(); return null; }
     zapamietajOsobe(ja); S.offline = false;
+    // kierownik zmienił rolę tego konta spisu w trakcie liczenia — wracamy do ekranu roli (już z nową)
+    if (bylaRola && roleKonta(ja).indexOf(bylaRola) < 0 && (S.ekran === 'liczenie' || S.ekran === 'wyslane')) {
+      S.rola = null; S.wybRola = null; S.warstwa = null; S.buf = ''; S.ostrz = null; S.ekran = 'rola';
+      zwolnijEkran(); rysuj(); odswiezStan(); toast(tx().rolaZmieniona(nazwaRoli(roleKonta(ja)[0], L())), 8000);
+    }
     return ja;
   } catch (e) {
     if (e.sesja) { sesjaWygasla(); return null; }
@@ -1034,25 +1138,25 @@ function htmlNaglowek(o) {
 function htmlStart() {
   var tresc = S.krok === 'pin' && S.pinOsoba ? htmlPin() : (S.krok === 'login' || !osobyUrz().length ? htmlLogin() : htmlKafelki());
   return '<div class="przew"><div class="start-w">' +
-    '<div class="start-gora"><div><span class="bebas start-logo">SPIS</span><span class="start-pod">Pracownia Sushi · inwentaryzacja dzienna · każdy loguje się swoim PIN-em z Tablicy</span></div>' + htmlMotyw('pl') + '</div>' +
+    '<div class="start-gora"><div><span class="bebas start-logo">SPIS</span><span class="start-pod">Pracownia Sushi · inwentaryzacja dzienna · każdy loguje się swoim PIN-em</span></div>' + htmlMotyw('pl') + '</div>' +
     tresc + '</div></div>';
 }
 function htmlKafelki() {
   var os = osobyUrz();
   var k = os.map(function (o) {
     return '<div class="kafel-w"><button type="button" class="kafel" data-a="osoba" data-v="' + esc(o.login) + '"' + (S.edycja ? ' disabled style="opacity:.6"' : '') + '><span class="awatar duzy">' + esc((o.imie || o.login).charAt(0).toUpperCase()) + '</span>' +
-      '<span class="kafel-imie">' + esc(o.imie || o.login) + '</span><span class="kafel-konto">' + esc(KONTA[o.rola] || '') + (o.jezyk === 'ua' ? ' <span class="znacznik">UA</span>' : '') + '</span></button>' +
+      '<span class="kafel-imie">' + esc(o.imie || o.login) + '</span><span class="kafel-konto">' + esc(o.rs && ROLE[o.rs] ? ROLE[o.rs][o.jezyk === 'ua' ? 'ua' : 'pl'] : (KONTA[o.rola] || '')) + (o.jezyk === 'ua' ? ' <span class="znacznik">UA</span>' : '') + '</span></button>' +
       (S.edycja ? '<button type="button" class="kafel-x" data-a="usunOsobe" data-v="' + esc(o.login) + '" aria-label="Usuń ' + esc(o.imie || o.login) + ' z tego urządzenia">×</button>' : '') + '</div>';
   }).join('');
   return '<div class="start-rzad"><span class="etykieta">Kto liczy? · Хто рахує?</span><button type="button" class="drugi maly" data-a="edycja">' + (S.edycja ? 'Gotowe' : 'Edytuj listę') + '</button></div>' +
     '<div class="kafelki">' + k + (S.edycja ? '' : '<button type="button" class="kafel kafel-inna" data-a="inna">+ Inna osoba · Інша особа</button>') + '</div>' +
     (S.edycja ? '<p class="pod-t">Usunięcie kafelka nie usuwa konta — osoba zaloguje się znowu przez „Inna osoba”.</p>' : '') +
-    '<p class="start-stopka">Konta i PIN-y są te same co w Tablicy — zakłada je kierownik (Tablica → Menu → Załoga). Po wysłaniu spisu wyloguj się, żeby następna osoba liczyła na swoje imię.</p>';
+    '<p class="start-stopka">Konto do spisu zakłada kierownik (Spis dnia → Konta spisu) — każde konto liczy jedną rolę. Kierownik i szef zmiany logują się kontem z Tablicy. Po wysłaniu spisu wyloguj się, żeby następna osoba liczyła na swoje imię.</p>';
 }
 function htmlLogin() {
   return '<form class="logowanie" data-form="login" autocomplete="off">' +
     '<label class="pole-l"><span class="etykieta">Twój login · Ваш логін</span><input class="pole" id="login" value="' + esc(S.loginTxt) + '" placeholder="np. ania" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" maxlength="60"></label>' +
-    '<span class="pod-t">Login i PIN dostajesz od kierownika — te same co w Tablicy. Na tym iPadzie wpiszesz login tylko raz, potem wystarczy kafelek.<br>Логін і PIN дає керівник — ті самі, що в Tablica.</span>' +
+    '<span class="pod-t">Login i PIN dostajesz od kierownika. Na tym iPadzie wpiszesz login tylko raz, potem wystarczy kafelek.<br>Логін і PIN дає керівник. На цьому iPad логін вводите лише раз, далі — плитка з ім’ям.</span>' +
     '<button type="submit" class="glowny"' + (S.loginTxt.trim() ? '' : ' disabled') + ' id="loginDalej">Dalej · Далі</button>' +
     (osobyUrz().length ? '<button type="button" class="drugi" data-a="doKafelkow">Wróć do listy osób</button>' : '') + '</form>';
 }
@@ -1118,7 +1222,8 @@ async function wyloguj(mimo) {
   var n = mojaKolejka().length;
   if (n && !mimo) { S.warstwa = { typ: 'wylogujKolejka' }; pokazWarstwe(); return; }
   await baza.wyloguj();
-  S.ja = null; pisz(KL.ja, null); S.rola = null; S.wybRola = null; S.w = {}; S.hist = null; S.stan = null; S.dw = null; S.wysLok = {};
+  var tt = $('#toast'); if (tt) tt.hidden = true;
+  S.ja = null; pisz(KL.ja, null); S.rola = null; S.wybRola = null; S.w = {}; S.hist = null; S.stan = null; S.dw = null; S.wysLok = {}; S.kn = null;
   S.ekran = 'start'; S.krok = osobyUrz().length ? 'kto' : 'login'; S.pin = ''; S.pinBlad = ''; S.pinOsoba = null; S.warstwa = null; S.stos = []; S.buf = ''; S.ostrz = null;
   zwolnijEkran(); rysuj();
 }
@@ -1133,7 +1238,10 @@ function htmlLadowanie() {
 function htmlKonto() {
   var t = S.konto === 'ekran'
     ? '<h1 class="h1">To konto Kokpitu</h1><p class="pod" style="margin:0 auto">Kokpit tylko pokazuje Tablicę — spisu nie liczy. Zaloguj się swoim kontem.</p>'
-    : '<h1 class="h1">Konto bez dostępu</h1><p class="pod" style="margin:0 auto">To konto jest zablokowane albo nie ma go w załodze. Porozmawiaj z kierownikiem.</p>';
+    : S.konto === 'bezSpisu'
+      ? '<h1 class="h1">To konto nie liczy spisu</h1><p class="pod" style="margin:0 auto">Konta kuchni i obsługi z Tablicy nie liczą spisu. Do spisu kierownik zakłada osobne konto z jedną rolą (Spis dnia → Konta spisu).</p>' +
+        '<p class="pod" style="margin:0 auto">Цей обліковий запис не рахує інвентаризацію. Попросіть керівника про обліковий запис для підрахунку.</p>'
+      : '<h1 class="h1">Konto bez dostępu</h1><p class="pod" style="margin:0 auto">To konto jest zablokowane albo nie ma go w załodze. Porozmawiaj z kierownikiem.</p>';
   return '<div class="przew"><div class="konto-w"><span class="bebas start-logo">SPIS</span>' + t + '<button type="button" class="glowny" data-a="wylogujMimo">Wyloguj</button></div></div>';
 }
 
@@ -1151,9 +1259,11 @@ function statusRoliTxt(r, l) {
 }
 function htmlBanerProby(l) { return proba() ? '<div class="baner uw"><span>' + esc(TX[l].probaBaner(dataStartu(l))) + '</span></div>' : ''; }
 function htmlRola() {
-  var ja = S.ja, l = L(), T = TX[l];
-  var ost = ja.ostatnia_rola;
-  if (!S.wybRola && ost && ROLE[ost]) S.wybRola = ost;
+  var ja = S.ja, l = L(), T = TX[l], moje = roleKonta(), jedna = moje.length === 1;
+  var ost = jedna ? null : ja.ostatnia_rola;
+  if (jedna) S.wybRola = moje[0];
+  else if (S.wybRola && moje.indexOf(S.wybRola) < 0) S.wybRola = null;
+  if (!S.wybRola && ost && ROLE[ost] && moje.indexOf(ost) >= 0) S.wybRola = ost;
   function karta(r) {
     var st = statusRoliTxt(r, l), n = pozycjeRoli(r).length, wsz = wszystkieRoli(r).length;
     var meta = T.poz(n) + (n < wsz ? ' / ' + wsz : '') + (r === 'MG' ? ' · ' + T.nieobow : '');
@@ -1168,7 +1278,8 @@ function htmlRola() {
     ['R', l === 'ua' ? 'Ресторан' : 'Restauracja', T.termin(hhmmMin(termin('RQ'))) + ' (' + dzT + ')'],
     ['M', l === 'ua' ? 'Склад' : 'Magazyn', T.rano]
   ].map(function (g) {
-    var rr = KOL_ROL.filter(function (r) { return ROLE[r].gr === g[0]; });
+    var rr = KOL_ROL.filter(function (r) { return ROLE[r].gr === g[0] && moje.indexOf(r) >= 0; });
+    if (!rr.length) return '';
     return '<div class="grupa-rol"><div class="grupa-rol-nag"><span class="etykieta">' + esc(g[1]) + '</span><span>' + esc(g[2]) + '</span></div><div class="rol-siatka">' + rr.map(karta).join('') + '</div></div>';
   }).join('');
   var kier = kierownik() ? '<button type="button" class="karta-kier" data-a="spisDnia">' + I.oko + '<span><b>Spis dnia — podgląd na żywo</b>kto liczy, kto skończył, czego brakuje</span></button>' : '';
@@ -1180,7 +1291,7 @@ function htmlRola() {
   }
   return htmlNaglowek({ srodek: '' }) + htmlBanerProby(l) +
     '<div class="przew"><div class="rola-w">' + kier +
-    '<div class="rola-gora"><div><h1 class="h1">' + esc(T.jakoKto) + '</h1><p class="pod">' + esc(T.jakoKtoPod) + '</p></div>' +
+    '<div class="rola-gora"><div><h1 class="h1">' + esc(jedna ? T.twojaRola : T.jakoKto) + '</h1><p class="pod">' + esc(jedna ? T.twojaRolaPod : T.jakoKtoPod) + '</p></div>' +
     '<div class="jezyk"><div class="seg" role="group" aria-label="' + esc(T.jezyk) + '">' +
     '<button type="button" data-a="jezyk" data-v="pl" aria-pressed="' + (l === 'pl') + '">PL</button><button type="button" data-a="jezyk" data-v="ua" aria-pressed="' + (l === 'ua') + '">UA</button></div>' +
     '<small>' + esc(T.zapam(ja.imie)) + '</small></div></div>' + grupy + '</div></div>' +
@@ -1196,7 +1307,7 @@ function htmlLiczenie() {
   var srodek = '<span class="chip-rola" style="--kol:var(--' + r + ')"><span>' + esc(nazwaRoli(r, l)) + '</span></span>' +
     '<button type="button" class="postep" data-a="lista" id="postep">' + I.lista + '<span id="postep-t">' + st.zrob + ' / ' + st.n + '</span></button>';
   var baner = '';
-  if (zamkniete()) baner = '<div class="baner bl"><span>' + esc(T.zamkniete) + '</span><button type="button" class="drugi maly" data-a="zmienRole">' + esc(T.zmienRole) + '</button></div>';
+  if (zamkniete()) baner = '<div class="baner bl"><span>' + esc(T.zamkniete) + '</span><button type="button" class="drugi maly" data-a="zmienRole">' + esc(jednaRola() ? T.nowyDzien : T.zmienRole) + '</button></div>';
   else if (wys) baner = '<div class="baner"><span>' + esc(wys.q ? T.czekaEkr : T.trybPopr(hhmm(wys.t))) + '</span><button type="button" class="drugi maly" data-a="gotowe">' + esc(T.gotowe) + '</button></div>';
   else if (S.bezHist) baner = '<div class="baner uw"><span>' + esc(T.bezPodpowiedzi) + '</span></div>';
   return htmlNaglowek({ srodek: srodek }) +
@@ -1371,7 +1482,7 @@ function htmlWyslane() {
     '<div class="przew"><div class="wys-w">' + gora +
     '<div class="ramka-info"><span>' + esc(plik) + '</span><span>' + esc(T.poprawkiDo6) + '</span></div>' +
     '<div class="wys-akcje">' + (zamkniete() ? '' : '<button type="button" class="drugi" data-a="poprawLiczbe">' + esc(T.poprawLiczbe) + '</button>') +
-    '<button type="button" class="drugi" data-a="zmienRole">' + esc(T.zmienRole) + '</button>' +
+    (jednaRola() ? '' : '<button type="button" class="drugi" data-a="zmienRole">' + esc(T.zmienRole) + '</button>') +
     '<button type="button" class="glowny" data-a="wyloguj">' + esc(T.wyloguj) + '</button></div></div></div>';
 }
 
@@ -1478,7 +1589,8 @@ function htmlSpisDnia() {
   return htmlNaglowek({ tytul: 'SPIS DNIA' }) + htmlBanerProby('pl') +
     '<div class="przew"><div class="sd-w">' +
     '<div class="sd-gora"><div><h1 class="h1">' + esc(d.charAt(0).toUpperCase() + d.slice(1)) + '</h1><p class="pod" id="sd-pod">' + htmlPodsumSD() + '</p></div>' +
-    '<button type="button" class="drugi" data-a="liczeSam">Liczę sam</button></div>' +
+    '<div class="przyc-rzad">' + (S.ja.rola === 'kierownik' ? '<button type="button" class="drugi" data-a="konta">Konta spisu</button>' : '') +
+    '<button type="button" class="drugi" data-a="liczeSam">Liczę sam</button></div></div>' +
     '<div class="alerty" id="sd-al">' + al.map(function (a) { return '<div class="alert">' + I.uwagaM + '<span>' + esc(a) + '</span></div>'; }).join('') + '</div>' +
     '<div class="sd-siatka"><div class="sd-kol" id="sd-role">' + htmlRoleSD() + '</div>' +
     '<div class="sd-kol"><section class="karta-b" id="sd-plik">' + htmlPlikSD() + '</section>' +
@@ -1514,12 +1626,12 @@ function arkusz(tytul, pod, tresc, stopka, opcje) {
 }
 function htmlMenu() {
   var ja = S.ja, l = L(), T = TX[l], licze = S.ekran === 'liczenie' || S.ekran === 'wyslane';
-  var t = '<div class="menu-osoba"><span class="awatar duzy">' + esc((ja.imie || ja.login).charAt(0).toUpperCase()) + '</span><span><b>' + esc(ja.imie || ja.login) + '</b><small>' + esc((l === 'ua' ? KONTA_UA : KONTA)[ja.rola] || ja.rola) + ' · ' + esc(ja.login) + '</small></span></div>';
-  if (licze) t += '<div class="menu-wiersz"><span>' + esc(T.liczysz) + ': ' + esc(nazwaRoli(S.rola, l)) + '</span><button type="button" class="drugi maly" data-a="zmienRole">' + esc(T.zmienRole) + '</button></div>';
+  var t = '<div class="menu-osoba"><span class="awatar duzy">' + esc((ja.imie || ja.login).charAt(0).toUpperCase()) + '</span><span><b>' + esc(ja.imie || ja.login) + '</b><small>' + esc(opisKonta(ja, l)) + ' · ' + esc(ja.login) + '</small></span></div>';
+  if (licze) t += '<div class="menu-wiersz"><span>' + esc(T.liczysz) + ': ' + esc(nazwaRoli(S.rola, l)) + '</span>' + (jednaRola() ? '' : '<button type="button" class="drugi maly" data-a="zmienRole">' + esc(T.zmienRole) + '</button>') + '</div>';
   t += '<div class="menu-wiersz"><span>' + esc(T.jezyk) + '</span><div class="seg"><button type="button" data-a="jezyk" data-v="pl" aria-pressed="' + (l === 'pl') + '">PL</button><button type="button" data-a="jezyk" data-v="ua" aria-pressed="' + (l === 'ua') + '">UA</button></div></div>';
   t += '<div class="menu-wiersz"><span>' + esc(T.wyglad) + '</span>' + htmlMotyw(l) + '</div>';
   if (kierownik()) t += '<div class="przyc-rzad"><button type="button" class="drugi maly" data-a="spisDnia">Spis dnia</button><button type="button" class="drugi maly" data-a="liczeSam">Liczę sam</button>' +
-    (ja.rola === 'kierownik' ? '<a class="drugi maly" href="https://tablica.dysza.app/#zaloga" target="_blank" rel="noopener" data-zaloga>Konta załogi — w Tablicy</a>' : '') + '</div>';
+    (ja.rola === 'kierownik' ? '<button type="button" class="drugi maly" data-a="konta">Konta spisu</button>' : '') + '</div>';
   t += '<label class="menu-sekcja"><span class="etykieta">' + esc(T.urzadzenie) + '</span><input class="menu-pole" id="urzadzenie" maxlength="40" placeholder="' + esc(T.urzadzeniePodp) + '" value="' + esc(czytaj(KL.urzadzenie, '') || '') + '"></label>';
   var q = mojaKolejka().length;
   if (q) t += '<div class="info-uw">' + I.kolejka + '<span>' + esc(T.wKolejceN(q)) + ' — ' + esc(T.wKolejce) + '</span></div>';
@@ -1613,6 +1725,142 @@ function htmlRolaSzcz(r) {
   var gora = '<p class="pod" style="margin:0">' + (S.dw ? (puste ? 'Czego brakuje: <b>' + puste + '</b> ' + lpPl(puste, 'pozycja', 'pozycje', 'pozycji') + ' bez liczby.' : 'Wszystko policzone.') : 'Wczytuję…') + '</p>';
   return arkusz(nazwaRoli(r, 'pl'), pod, gora + '<div class="rs-lista">' + h + '</div>', '');
 }
+// ============================================================
+// EKRAN: KONTA SPISU (kierownik) — konto = login + PIN + jedna rola; funkcja brzegowa spis-konta
+// ============================================================
+function nowyFormularz() { return { imie: '', login: '', loginR: false, rola: null, jezyk: 'pl', pin: '' }; }
+function otworzKonta() {
+  if (!S.ja || S.ja.rola !== 'kierownik') return;
+  S.ekran = 'konta'; S.warstwa = null; S.stos = []; S.rola = null; zwolnijEkran();
+  if (!S.kn) S.kn = { lista: null, blad: '', f: nowyFormularz(), wynik: null, prac: false, bladF: '', e: null };
+  rysuj(); wczytajKonta();
+}
+async function wczytajKonta() {
+  var k = S.kn; if (!k) return;
+  k.blad = ''; if (!k.lista) odswiezListeKont();
+  try { var j = await baza.funkcja('spis-konta', { akcja: 'lista' }); k.lista = j && j.konta ? j.konta : []; }
+  catch (e) { if (e.sesja) { sesjaWygasla(); return; } k.blad = e.siec ? 'Brak sieci — nie wczytałem kont. Spróbuj za chwilę.' : (e.message || 'Nie wczytałem kont.'); }
+  odswiezListeKont();
+  if (S.warstwa && S.warstwa.typ === 'konto') pokazWarstwe();
+}
+function odswiezListeKont() { var el = $('#kn-lista'); if (el && S.kn) el.innerHTML = htmlKontaLista(); }
+function odswiezNoweKonto() { var el = $('#kn-nowe'); if (el && S.kn) el.innerHTML = htmlKontaNowe(); }
+function kiedyKr(ms) { if (!ms) return '—'; var c = czesci(ms); return (+c.dzien.slice(8, 10)) + '.' + c.dzien.slice(5, 7) + ' ' + hhmm(ms); }
+function nazwaKr(r) { return ROLE[r].pl.replace(/^(Fabryka|Restauracja) – /, ''); }
+function htmlWyborRoli(wyb, akcja) {
+  return '<div class="kn-role">' + GRUPY_ROL.map(function (g) {
+    var rr = KOL_ROL.filter(function (r) { return ROLE[r].gr === g[0]; });
+    return '<div class="kn-rg"><span class="etykieta">' + esc(g[1]) + '</span><div class="kn-rr">' + rr.map(function (r) {
+      return '<button type="button" class="kn-r' + (wyb === r ? ' wyb' : '') + '" data-a="' + akcja + '" data-v="' + r + '" style="--kol:var(--' + r + ')" aria-pressed="' + (wyb === r) + '"><span class="pas"></span><span>' + esc(nazwaKr(r)) + '</span></button>';
+    }).join('') + '</div></div>';
+  }).join('') + '</div>';
+}
+function htmlKontaNowe() {
+  var k = S.kn, f = k.f;
+  if (k.wynik) {
+    var w = k.wynik;
+    return '<h2>Konto gotowe</h2><div class="kn-dane">' +
+      '<span class="etykieta">Imię</span><b>' + esc(w.imie) + '</b>' +
+      '<span class="etykieta">Rola</span><b>' + esc(ROLE[w.rola].pl) + '</b>' +
+      '<span class="etykieta">Login</span><b class="kn-duze" id="knWynikLogin">' + esc(w.login) + '</b>' +
+      '<span class="etykieta">PIN</span><b class="kn-duze" id="knWynikPin">' + esc(w.pin) + '</b></div>' +
+      '<p>Przekaż login i PIN tej osobie — najlepiej na kartce. PIN-u nie da się potem odczytać; w razie potrzeby nadasz nowy.</p>' +
+      '<p>Pierwsze logowanie na iPadzie: „Inna osoba” → login → PIN. Potem wystarczy kafelek z imieniem.</p>' +
+      '<button type="button" class="glowny" data-a="knNastepne">Następne konto</button>';
+  }
+  return '<h2>Nowe konto spisu</h2>' +
+    '<label class="pole-l"><span class="etykieta">Imię</span><input class="pole" id="knImie" maxlength="40" autocomplete="off" placeholder="np. Ola" value="' + esc(f.imie) + '"></label>' +
+    '<label class="pole-l"><span class="etykieta">Login</span><input class="pole" id="knLogin" maxlength="30" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="np. ola" value="' + esc(f.login) + '"></label>' +
+    '<span class="pod-t">Tworzy się z imienia — możesz zmienić. Małe litery bez polskich znaków, cyfry, kropka.</span>' +
+    '<div class="pole-l"><span class="etykieta">Rola — jedna; to konto policzy tylko ją</span>' + htmlWyborRoli(f.rola, 'knRola') + '</div>' +
+    '<div class="menu-wiersz"><span>Język aplikacji</span><div class="seg"><button type="button" data-a="knJezyk" data-v="pl" aria-pressed="' + (f.jezyk === 'pl') + '">PL</button><button type="button" data-a="knJezyk" data-v="ua" aria-pressed="' + (f.jezyk === 'ua') + '">UA</button></div></div>' +
+    '<label class="pole-l"><span class="etykieta">PIN — 6 cyfr</span><span class="kn-pin"><input class="pole" id="knPin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="np. 482913" value="' + esc(f.pin) + '"><button type="button" class="drugi" data-a="knLosuj">Wylosuj</button></span></label>' +
+    '<span class="blad-t" id="knBlad" role="alert">' + esc(k.bladF) + '</span>' +
+    '<button type="button" class="glowny" data-a="knZaloz"' + (k.prac ? ' disabled' : '') + '>' + (k.prac ? 'Zakładam…' : 'Załóż konto') + '</button>';
+}
+function wierszKonta(x) {
+  var stan = x.aktywny ? (x.ostatnio ? 'ostatnio ' + kiedyKr(czasZ(x.ostatnio)) : 'jeszcze się nie logował(a)') : 'zablokowane · ' + ROLE[x.rola].pl;
+  return '<button type="button" class="kn-osoba' + (x.aktywny ? '' : ' zabl') + '" data-a="knEdytuj" data-v="' + esc(x.id) + '"><span class="awatar">' + esc((x.imie || x.login).charAt(0).toUpperCase()) + '</span>' +
+    '<span class="t"><b>' + esc(x.imie) + (x.jezyk === 'ua' ? ' <span class="znacznik">UA</span>' : '') + '</b><small>' + esc(x.login + ' · ' + stan) + '</small></span>' +
+    '<span class="kn-zmien">Zmień</span></button>';
+}
+function htmlKontaLista() {
+  var k = S.kn;
+  if (k.blad) return '<div class="alert">' + I.uwagaM + '<span>' + esc(k.blad) + '</span></div><button type="button" class="drugi" data-a="knOdswiez">Spróbuj jeszcze raz</button>';
+  if (!k.lista) return '<p class="hist-ladowanie">Wczytuję konta…</p>';
+  var akt = k.lista.filter(function (x) { return x.aktywny; }), zabl = k.lista.filter(function (x) { return !x.aktywny; });
+  var h = KOL_ROL.map(function (r) {
+    var os = akt.filter(function (x) { return x.rola === r; });
+    return '<div class="kn-grupa" style="--kol:var(--' + r + ')" data-knrola="' + r + '"><div class="kn-gnag"><span class="kn-kw"></span><b>' + esc(ROLE[r].pl) + '</b><span>' + (os.length ? os.length : 'brak konta') + '</span></div>' +
+      os.map(wierszKonta).join('') + '</div>';
+  }).join('');
+  if (zabl.length) h += '<div class="kn-grupa" data-knrola="zablokowane"><div class="kn-gnag"><b>Zablokowane</b><span>' + zabl.length + '</span></div>' + zabl.map(wierszKonta).join('') + '</div>';
+  return h;
+}
+function htmlKonta() {
+  return htmlNaglowek({ tytul: 'KONTA' }) +
+    '<div class="przew"><div class="kn-w">' +
+    '<div class="sd-gora"><div><h1 class="h1">Konta spisu</h1><p class="pod">Każde konto liczy tylko jedną rolę — innej nie policzy, bo nie przepuści tego baza. Kierownik i szef zmiany liczą swoim kontem z Tablicy.</p></div>' +
+    '<button type="button" class="drugi" data-a="spisDnia">' + I.wstecz + 'Spis dnia</button></div>' +
+    '<div class="kn-siatka"><section class="karta-b kn-nowe" id="kn-nowe">' + htmlKontaNowe() + '</section>' +
+    '<section class="karta-b"><div class="kn-lnag"><h2>Konta</h2><button type="button" class="link" data-a="knOdswiez">Odśwież</button></div>' +
+    '<div class="kn-lista" id="kn-lista">' + htmlKontaLista() + '</div>' +
+    '<p class="pod-t">Konta kierownika, szefa zmiany i Kokpitu zakładasz w Tablicy (Menu → Załoga). Konta kuchni i obsługi z Tablicy spisu nie liczą.</p></section></div>' +
+    '</div></div>';
+}
+function htmlKontoArk(id) {
+  var k = S.kn, x = k && k.lista ? k.lista.filter(function (o) { return o.id === id; })[0] : null, e = k && k.e;
+  if (!x || !e) return arkusz('Konto', '', '<p class="pod">Nie ma tego konta na liście — odśwież listę.</p>', '');
+  var t = '<label class="pole-l"><span class="etykieta">Imię</span><input class="pole" id="keImie" maxlength="40" autocomplete="off" value="' + esc(e.imie) + '"></label>' +
+    '<div class="pole-l"><span class="etykieta">Rola</span>' + htmlWyborRoli(e.rola, 'keRola') + '</div>' +
+    '<button type="button" class="glowny" data-a="keZapisz"' + (e.prac ? ' disabled' : '') + '>Zapisz imię i rolę</button>' +
+    '<section class="kn-sek"><h3>Nowy PIN</h3>' +
+    (e.nowyPin
+      ? '<div class="info-ok">' + I.ok + '<span>Nowy PIN: <b class="kn-duze" id="keNowyPin">' + esc(e.nowyPin) + '</b><br>Przekaż go tej osobie — stary już nie działa.</span></div>'
+      : '<span class="kn-pin"><input class="pole" id="kePin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="6 cyfr" value="' + esc(e.pin) + '"><button type="button" class="drugi" data-a="keLosuj">Wylosuj</button></span>' +
+        '<button type="button" class="drugi" data-a="kePin"' + (e.prac ? ' disabled' : '') + '>Nadaj nowy PIN</button>') + '</section>' +
+    '<section class="kn-sek"><h3>' + (x.aktywny ? 'Blokada' : 'Konto zablokowane') + '</h3><p class="pod">' + (x.aktywny
+      ? 'Zablokowana osoba nie zaloguje się, a jej wpisy zostają z podpisem. Odblokujesz w każdej chwili.'
+      : 'Odblokuj, gdy osoba wraca — PIN zostaje ten sam.') + '</p>' +
+    '<button type="button" class="drugi" data-a="' + (x.aktywny ? 'keBlokuj' : 'keOdblokuj') + '"' + (e.prac ? ' disabled' : '') + '>' + (x.aktywny ? 'Zablokuj konto' : 'Odblokuj konto') + '</button></section>' +
+    '<span class="blad-t" id="keBlad" role="alert">' + esc(e.blad) + '</span>';
+  return arkusz(x.imie, x.login + ' · ' + ROLE[x.rola].pl + (x.aktywny ? '' : ' · zablokowane'), t, '', { cls: 'ark-konto' });
+}
+async function akcjaKonta(body, poSukcesie) {
+  var k = S.kn, e = k && k.e; if (!e || e.prac) return;
+  e.prac = true; e.blad = ''; pokazWarstwe();
+  try {
+    var j = await baza.funkcja('spis-konta', body);
+    if (j && j.konto) k.lista = (k.lista || []).map(function (o) { return o.id === j.konto.id ? Object.assign({}, o, j.konto) : o; });
+    e.prac = false;
+    if (poSukcesie) poSukcesie(j);
+    if (j && j.uwaga) toast(j.uwaga, 7000);
+  } catch (er) {
+    e.prac = false;
+    if (er.sesja) { sesjaWygasla(); return; }
+    e.blad = er.siec ? 'Brak sieci — nic nie zmieniłem. Spróbuj za chwilę.' : (er.message || 'Nie udało się.');
+  }
+  odswiezListeKont(); if (S.warstwa && S.warstwa.typ === 'konto') pokazWarstwe();
+}
+async function zalozKonto() {
+  var k = S.kn, f = k.f; if (k.prac) return;
+  var imie = f.imie.trim().replace(/\s+/g, ' '), login = f.login.trim().toLowerCase();
+  var b = !imie ? 'Wpisz imię.' : !/^[a-z0-9][a-z0-9._-]{1,29}$/.test(login) ? 'Login: 2–30 znaków — małe litery bez polskich znaków, cyfry, kropka.' : !f.rola ? 'Wybierz rolę.' : bladPinu(f.pin);
+  if (b) { k.bladF = b; odswiezNoweKonto(); return; }
+  k.prac = true; k.bladF = ''; odswiezNoweKonto();
+  try {
+    var j = await baza.funkcja('spis-konta', { akcja: 'dodaj', imie: imie, login: login, rola: f.rola, pin: f.pin, jezyk: f.jezyk });
+    k.wynik = { imie: j.konto.imie, login: j.konto.login, rola: j.konto.rola, pin: f.pin };
+    k.f = nowyFormularz();
+    k.lista = (k.lista || []).filter(function (o) { return o.id !== j.konto.id; }).concat([j.konto]).sort(function (a, c) { return a.imie.localeCompare(c.imie, 'pl'); });
+    toast('Konto założone: ' + j.konto.imie + ' · ' + ROLE[j.konto.rola].pl);
+  } catch (e) {
+    if (e.sesja) { k.prac = false; sesjaWygasla(); return; }
+    k.bladF = e.siec ? 'Brak sieci — konto nie powstało. Spróbuj za chwilę.' : (e.message || 'Nie udało się założyć konta.');
+  }
+  k.prac = false; odswiezNoweKonto(); odswiezListeKont();
+}
+
 function htmlWylogujKolejka() {
   var T = tx(), n = mojaKolejka().length;
   return arkusz(T.wyloguj, '', '<div class="info-uw">' + I.kolejka + '<span>' + esc(T.wylogujKolejka(n)) + '</span></div>',
@@ -1629,6 +1877,7 @@ function pokazWarstwe() {
   else if (w.typ === 'wyslij') h = htmlWyslij();
   else if (w.typ === 'rolaSzcz') h = htmlRolaSzcz(w.r);
   else if (w.typ === 'wylogujKolejka') h = htmlWylogujKolejka();
+  else if (w.typ === 'konto') h = htmlKontoArk(w.k);
   var lista = el.querySelector('.ark-tresc'), y = lista && el.getAttribute('data-typ') === w.typ + (w.k || w.r || '') ? lista.scrollTop : 0;
   el.innerHTML = h; el.hidden = false; el.setAttribute('data-typ', w.typ + (w.k || w.r || ''));
   var nowa = el.querySelector('.ark-tresc'); if (nowa && y) nowa.scrollTop = y;
@@ -1650,6 +1899,7 @@ function rysuj() {
   else if (S.ekran === 'liczenie') h = htmlLiczenie();
   else if (S.ekran === 'wyslane') h = htmlWyslane();
   else if (S.ekran === 'spisDnia') h = htmlSpisDnia();
+  else if (S.ekran === 'konta') h = htmlKonta();
   a.innerHTML = h;
   document.documentElement.lang = S.ja && L() === 'ua' && S.ekran !== 'spisDnia' ? 'uk' : 'pl';
   pokazWarstwe();
@@ -1733,7 +1983,7 @@ function klawisz(c) {
   S.buf = b; odswiezWysw();
 }
 async function zacznij() {
-  var r = S.wybRola; if (!r || zamkniete()) return;
+  var r = S.wybRola; if (!r || zamkniete() || roleKonta().indexOf(r) < 0) return;
   S.rola = r; S.idx = 0; S.buf = ''; S.ostrz = null; S.uwagi = ''; S.w = {}; S.hist = null; S.warstwa = null;
   S.ekran = 'ladowanie'; S.ladTxt = tx().ladowanie; rysuj();
   if (S.ja.ostatnia_rola !== r) { S.ja.ostatnia_rola = r; pisz(KL.ja, S.ja); baza.rpc('spis_ustaw', { p_ostatnia_rola: r }).catch(function () { }); }
@@ -1774,12 +2024,45 @@ var AKCJE = {
   motyw: function (v) { ustawMotyw(v); if (S.warstwa) pokazWarstwe(); rysuj(); },
   jezyk: function (v) { ustawJezyk(v); },
   wybRole: function (v) {
+    if (roleKonta().indexOf(v) < 0) return;
     S.wybRola = v; rysuj();
     var st = stanRoli(v);
     if (!st.wys && st.ost && st.ost.kto && st.ost.kto !== S.ja.imie && teraz() - st.ost.t < 15 * 60000) toast(tx().liczyRazem(st.ost.kto), 5000);
   },
   zacznij: function () { zacznij(); },
-  spisDnia: function () { S.ekran = 'spisDnia'; S.warstwa = null; S.rola = null; zwolnijEkran(); rysuj(); odswiezStan(); odswiezDW(); },
+  spisDnia: function () { if (S.kn) { S.kn.wynik = null; S.kn.e = null; } S.ekran = 'spisDnia'; S.warstwa = null; S.rola = null; zwolnijEkran(); rysuj(); odswiezStan(); odswiezDW(); },
+  konta: function () { otworzKonta(); },
+  knRola: function (v) { if (!S.kn || !ROLE[v]) return; S.kn.f.rola = v; S.kn.bladF = ''; odswiezNoweKonto(); },
+  knJezyk: function (v) { if (!S.kn) return; S.kn.f.jezyk = v === 'ua' ? 'ua' : 'pl'; odswiezNoweKonto(); },
+  knLosuj: function () { if (!S.kn) return; S.kn.f.pin = losujPin(); S.kn.bladF = ''; odswiezNoweKonto(); },
+  knZaloz: function () { zalozKonto(); },
+  knNastepne: function () { if (!S.kn) return; S.kn.wynik = null; S.kn.bladF = ''; odswiezNoweKonto(); var i = $('#knImie'); if (i) { try { i.focus({ preventScroll: true }); } catch (e) { } } },
+  knOdswiez: function () { if (!S.kn) return; S.kn.lista = null; wczytajKonta(); },
+  knEdytuj: function (v) {
+    var x = S.kn && S.kn.lista ? S.kn.lista.filter(function (o) { return o.id === v; })[0] : null; if (!x) return;
+    S.kn.e = { id: x.id, imie: x.imie, rola: x.rola, pin: '', nowyPin: null, blad: '', prac: false };
+    S.stos = []; S.warstwa = { typ: 'konto', k: x.id }; pokazWarstwe();
+  },
+  keRola: function (v) { if (!S.kn || !S.kn.e || !ROLE[v]) return; S.kn.e.rola = v; S.kn.e.blad = ''; pokazWarstwe(); },
+  keLosuj: function () { if (!S.kn || !S.kn.e) return; S.kn.e.pin = losujPin(); S.kn.e.blad = ''; pokazWarstwe(); },
+  keZapisz: function () {
+    var e = S.kn && S.kn.e; if (!e) return;
+    var x = S.kn.lista.filter(function (o) { return o.id === e.id; })[0]; if (!x) return;
+    var imie = e.imie.trim().replace(/\s+/g, ' '), zm = { akcja: 'zmien', id: e.id };
+    if (!imie) { e.blad = 'Wpisz imię.'; pokazWarstwe(); return; }
+    if (imie !== x.imie) zm.imie = imie;
+    if (e.rola !== x.rola) zm.rola = e.rola;
+    if (!zm.imie && !zm.rola) { e.blad = 'Nic się nie zmieniło.'; pokazWarstwe(); return; }
+    akcjaKonta(zm, function (j) { toast('Zapisane: ' + j.konto.imie + ' · ' + ROLE[j.konto.rola].pl); S.kn.e = null; S.warstwa = null; pokazWarstwe(); });
+  },
+  kePin: function () {
+    var e = S.kn && S.kn.e; if (!e) return;
+    var b = bladPinu(e.pin); if (b) { e.blad = b; pokazWarstwe(); return; }
+    var pin = e.pin;
+    akcjaKonta({ akcja: 'pin', id: e.id, pin: pin }, function () { e.nowyPin = pin; e.pin = ''; });
+  },
+  keBlokuj: function () { var e = S.kn && S.kn.e; if (e) akcjaKonta({ akcja: 'zablokuj', id: e.id }); },
+  keOdblokuj: function () { var e = S.kn && S.kn.e; if (e) akcjaKonta({ akcja: 'odblokuj', id: e.id }); },
   liczeSam: function () { S.ekran = 'rola'; S.wybRola = null; S.warstwa = null; rysuj(); odswiezStan(); },
   menu: function () { S.warstwa = { typ: 'menu' }; pokazWarstwe(); },
   zamknij: zamknijWarstwe,
@@ -1839,6 +2122,14 @@ document.addEventListener('input', function (e) {
   else if (id === 'uwagi') S.uwagi = e.target.value;
   else if (id === 'login') { var v = e.target.value.replace(/\s/g, '').toLowerCase(); if (v !== e.target.value) e.target.value = v; S.loginTxt = v; var b = $('#loginDalej'); if (b) b.disabled = !v; }
   else if (id === 'urzadzenie') pisz(KL.urzadzenie, e.target.value.trim());
+  else if (id === 'knImie' && S.kn) {
+    S.kn.f.imie = e.target.value;
+    if (!S.kn.f.loginR) { S.kn.f.login = loginZImienia(e.target.value); var li = $('#knLogin'); if (li) li.value = S.kn.f.login; }
+  }
+  else if (id === 'knLogin' && S.kn) { var lv = e.target.value.replace(/\s/g, '').toLowerCase(); if (lv !== e.target.value) e.target.value = lv; S.kn.f.login = lv; S.kn.f.loginR = lv !== ''; }
+  else if (id === 'knPin' && S.kn) { var pv = e.target.value.replace(/\D/g, '').slice(0, 6); if (pv !== e.target.value) e.target.value = pv; S.kn.f.pin = pv; }
+  else if (id === 'keImie' && S.kn && S.kn.e) S.kn.e.imie = e.target.value;
+  else if (id === 'kePin' && S.kn && S.kn.e) { var kv = e.target.value.replace(/\D/g, '').slice(0, 6); if (kv !== e.target.value) e.target.value = kv; S.kn.e.pin = kv; }
 });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape' && S.warstwa) { zamknijWarstwe(); return; }
