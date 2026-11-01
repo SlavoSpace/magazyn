@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="spis-wersja" content="2026-10-31.1729">
+<meta name="spis-wersja" content="2026-11-01.1730">
 <meta name="theme-color" content="#0B0F0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -369,6 +369,7 @@ button.postep{border:1px solid var(--ramka);background:var(--pow);color:var(--te
 .hist-ladowanie{font-size:14px;color:var(--tekst2);padding:8px 0}
 .alert.cicho{border-color:var(--ramka);background:var(--pow);color:var(--tekst2)}
 @media (max-width:760px){.nowa-w{padding:0 8px}.chip-proba{display:none}}
+a.drugi{text-decoration:none;color:var(--tekst)}
 </style>
 </head>
 <body>
@@ -1517,7 +1518,8 @@ function htmlMenu() {
   if (licze) t += '<div class="menu-wiersz"><span>' + esc(T.liczysz) + ': ' + esc(nazwaRoli(S.rola, l)) + '</span><button type="button" class="drugi maly" data-a="zmienRole">' + esc(T.zmienRole) + '</button></div>';
   t += '<div class="menu-wiersz"><span>' + esc(T.jezyk) + '</span><div class="seg"><button type="button" data-a="jezyk" data-v="pl" aria-pressed="' + (l === 'pl') + '">PL</button><button type="button" data-a="jezyk" data-v="ua" aria-pressed="' + (l === 'ua') + '">UA</button></div></div>';
   t += '<div class="menu-wiersz"><span>' + esc(T.wyglad) + '</span>' + htmlMotyw(l) + '</div>';
-  if (kierownik()) t += '<div class="przyc-rzad"><button type="button" class="drugi maly" data-a="spisDnia">Spis dnia</button><button type="button" class="drugi maly" data-a="liczeSam">Liczę sam</button></div>';
+  if (kierownik()) t += '<div class="przyc-rzad"><button type="button" class="drugi maly" data-a="spisDnia">Spis dnia</button><button type="button" class="drugi maly" data-a="liczeSam">Liczę sam</button>' +
+    (ja.rola === 'kierownik' ? '<a class="drugi maly" href="https://tablica.dysza.app/#zaloga" target="_blank" rel="noopener" data-zaloga>Konta załogi — w Tablicy</a>' : '') + '</div>';
   t += '<label class="menu-sekcja"><span class="etykieta">' + esc(T.urzadzenie) + '</span><input class="menu-pole" id="urzadzenie" maxlength="40" placeholder="' + esc(T.urzadzeniePodp) + '" value="' + esc(czytaj(KL.urzadzenie, '') || '') + '"></label>';
   var q = mojaKolejka().length;
   if (q) t += '<div class="info-uw">' + I.kolejka + '<span>' + esc(T.wKolejceN(q)) + ' — ' + esc(T.wKolejce) + '</span></div>';
