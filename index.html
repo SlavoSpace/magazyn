@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="spis-wersja" content="2026-11-01.1909">
+<meta name="spis-wersja" content="2026-11-01.1940">
 <meta name="theme-color" content="#0B0F0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -405,6 +405,44 @@ a.drugi{text-decoration:none;color:var(--tekst)}
 @media (max-width:520px){.kn-rr{grid-template-columns:repeat(2,minmax(0,1fr))}.kn-duze{font-size:26px!important}}
 .ark-konto .ark-tresc>*{flex-shrink:0}
 .ark-konto .ark-tresc>.glowny{width:100%}
+
+/* ===== telefon w jednej ręce: klawiatura i „Zapisz i dalej” zawsze na dole ekranu, informacje o towarze nad nimi ===== */
+@media (max-width:600px){
+  .uklad{overflow:hidden}
+  .panel-info{flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px 16px 4px;gap:6px}
+  .panel-klaw{flex:0 0 auto;padding:4px 12px calc(10px + env(safe-area-inset-bottom,0px));gap:8px}
+  .i-gora{min-height:24px}
+  .i-n1{font-size:24px}
+  .i-n2{font-size:14px;margin-top:-4px}
+  .i-meta .chip.cz{display:none}
+  .i-meta .chip{min-height:24px;font-size:12px;padding:2px 8px}
+  .i-podp{font-size:14px;gap:2px 12px}
+  .wysw{min-height:64px;padding:2px 16px;border-radius:16px}
+  .wysw .lb{font-size:52px;padding-top:6px}
+  .wysw .jd{font-size:17px;padding-bottom:10px}
+  .kursor{height:38px}
+  .k-stan{min-height:18px;font-size:13px}
+  .klaw{gap:8px}
+  .klaw .kl{height:clamp(44px,7.4vh,64px);height:clamp(44px,7.4svh,64px);font-size:26px;border-radius:14px}
+  .k-dol{grid-template-columns:56px minmax(0,1fr);gap:8px}
+  .k-dol .glowny,.wstecz{height:54px;border-radius:14px}
+  .ostrz-p{padding:12px;gap:6px}
+  .ostrz-t{font-size:21px}
+  .ostrz-b button{min-height:54px}
+}
+@media (max-width:600px) and (max-height:600px){
+  .i-n2,.i-meta{display:none}
+  .wysw{min-height:56px}
+  .wysw .lb{font-size:44px}
+  .kursor{height:32px}
+  .klaw .kl{height:42px;font-size:24px}
+  .k-dol .glowny,.wstecz{height:50px}
+}
+/* telefon: brak sieci widać słowem (zamiast zegara), nie tylko kolorem kropki */
+@media (max-width:760px){
+  .pol[data-stan="offline"] .pol-t{display:inline}
+  .nag-p:has(.pol[data-stan="offline"]) .nag-zegar{display:none}
+}
 </style>
 </head>
 <body>
@@ -427,6 +465,13 @@ var WERSJA = (document.querySelector('meta[name="spis-wersja"]') || {}).content 
 var URL_BAZY = KONF.url || 'https://srmiealxhcbjornmnboe.supabase.co';
 var KLUCZ_API = KONF.klucz || 'sb_publishable_NkiS-_7GBmW5d3ufWjjFEg_CuCpaADz';
 var DOMENA_KONT = 'tablica.dysza.app';
+// Urządzenie: telefon (krótszy bok ekranu poniżej 600 px) albo iPad — od tego zależą słowa w komunikatach
+var TEL = (function () { try { return Math.min(screen.width, screen.height) < 600; } catch (e) { return false; } })();
+var URZ = TEL
+  ? { pl: { m: 'telefon', d: 'telefonu', ms: 'telefonie', w: 'w telefonie', W: 'W telefonie', siec: 'sieć', np: 'np. telefon Ani' },
+      ua: { m: 'телефон', d: 'телефона', ms: 'телефоні', w: 'у телефоні', W: 'У телефоні', siec: 'мережу', np: 'напр. телефон Олени' } }
+  : { pl: { m: 'iPad', d: 'iPada', ms: 'iPadzie', w: 'na iPadzie', W: 'Na iPadzie', siec: 'Wi-Fi', np: 'np. iPad w chłodni' },
+      ua: { m: 'iPad', d: 'iPad', ms: 'iPad', w: 'на iPad', W: 'На iPad', siec: 'Wi-Fi', np: 'напр. iPad у холодильній камері' } };
 var KL = {
   sesja: 'spis.sesja.v1', ja: 'spis.ja.v1', osoby: 'spis.osoby.v1', proby: 'spis.proby.v1', kolejka: 'spis.kolejka.v1',
   slownik: 'spis.slownik.v1', motyw: 'spis.motyw', urzadzenie: 'spis.urzadzenie', hist: 'spis.hist.v1'
@@ -710,7 +755,7 @@ var TX = {
     potw: function (n) { return 'Potwierdzone nietypowe liczby: ' + n + ' — kierownik widzi je od razu.'; },
     poprawkiDo6: 'Poprawki do 6:00 rano — każda z podpisem: kto i kiedy.',
     wyslaneEkr: function (t) { return 'Wysłane ' + t; }, czekaEkr: 'Spis czeka na sieć', dziekujemy: 'Zapisano — dziękujemy!', spokojnie: 'Wszystko policzone. Magazyn może spać spokojnie.',
-    czekaNaSiec: 'Wyjdzie sam, gdy iPad złapie Wi-Fi. Nie wylogowuj się do tego czasu.',
+    czekaNaSiec: 'Wyjdzie sam, gdy ' + URZ.pl.m + ' złapie ' + URZ.pl.siec + '. Nie wylogowuj się do tego czasu.',
     poprawLiczbe: 'Popraw liczbę', wyloguj: 'Wyloguj', gotowe: 'Gotowe', trybPopr: function (t) { return 'Poprawki do 6:00 · spis wysłany ' + t; },
     poprawkaZap: function (k, t) { return 'Poprawka zapisana · ' + k + ', ' + t; }, zamkniete: 'Poprawki zamknięte o 6:00 — plik dnia poszedł dalej.',
     naZywo: 'na żywo', brakSieci: 'brak sieci', wKolejceN: function (n) { return n + ' w kolejce'; }, wysylam: 'wysyłam…',
@@ -727,14 +772,14 @@ var TX = {
     wszystkie: 'Wszystkie role wysłane — plik dnia i mail ok. 15 min po ostatnim wysłaniu.',
     menu: 'Menu', zalogowany: 'zalogowany', pustyKoniec: 'Koniec listy', gotoweLiczenie: 'Wszystko policzone — możesz wysłać.',
     proba: 'PRÓBA', probaBaner: function (d) { return 'Próba: dzisiejsze liczby nie trafiają do pliku dnia ani do FIRMINO. Prawdziwy spis od ' + d + '.'; },
-    ladowanie: 'Wczytuję…', bezPodpowiedzi: 'Brak sieci — liczysz bez podpowiedzi „wczoraj”. Wpisy poczekają na iPadzie.',
+    ladowanie: 'Wczytuję…', bezPodpowiedzi: 'Brak sieci — liczysz bez podpowiedzi „wczoraj”. Wpisy poczekają ' + URZ.pl.w + '.',
     bDzien: 'Poprawki zamknięte o 6:00 — ten wpis nie wszedł.', bPozycja: 'Tej pozycji nie ma już w tej roli (zmiana w SŁOWNIKU) — wpis pominięty.',
     bIlosc: 'Liczba poza zakresem — wpis pominięty.', bDostep: 'Konto bez dostępu do spisu — porozmawiaj z kierownikiem.',
     bPuste: function (n) { return 'Spis nie wysłany: brakuje ' + n + ' ' + lpPl(n, 'pozycji', 'pozycji', 'pozycji') + '. Uzupełnij i wyślij jeszcze raz.'; },
     bInny: function (m) { return 'Nie zapisałem: ' + m; },
-    wylogujKolejka: function (n) { return 'Na iPadzie czeka ' + n + ' ' + lpPl(n, 'wpis', 'wpisy', 'wpisów') + ' do wysłania. Poczekaj chwilę na sieć — po wylogowaniu wyjdą dopiero, gdy znowu się zalogujesz.'; },
+    wylogujKolejka: function (n) { return URZ.pl.W + ' czeka ' + n + ' ' + lpPl(n, 'wpis', 'wpisy', 'wpisów') + ' do wysłania. Poczekaj chwilę na sieć — po wylogowaniu wyjdą dopiero, gdy znowu się zalogujesz.'; },
     wylogujMimo: 'Wyloguj mimo to', czekam: 'Czekam na sieć',
-    nowaWersja: 'Nowa wersja', odswiezApp: 'Odśwież aplikację', urzadzenie: 'Nazwa tego iPada', urzadzeniePodp: 'np. iPad w chłodni — widać ją przy wpisach',
+    nowaWersja: 'Nowa wersja', odswiezApp: 'Odśwież aplikację', urzadzenie: 'Nazwa tego ' + URZ.pl.d, urzadzeniePodp: URZ.pl.np + ' — widać ją przy wpisach',
     zmienOsobe: 'Zmień osobę', spisDnia: 'Spis dnia', liczeSam: 'Liczę sam', wersja: 'Wersja',
     twojaRola: 'Twoja rola', twojaRolaPod: 'To konto liczy tylko tę rolę. Inna rola to inne konto — u kierownika.', nowyDzien: 'Nowy dzień',
     bInnaRola: function (r) { return 'To konto liczy tylko ' + (r ? 'rolę: ' + r : 'swoją rolę') + ' — wpis pominięty.'; },
@@ -761,7 +806,7 @@ var TX = {
     potw: function (n) { return 'Підтверджені незвичні числа: ' + n + ' — керівник бачить їх одразу.'; },
     poprawkiDo6: 'Виправлення — до 6:00 ранку, кожне з підписом: хто і коли.',
     wyslaneEkr: function (t) { return 'Надіслано ' + t; }, czekaEkr: 'Підрахунок чекає на мережу', dziekujemy: 'Збережено — дякуємо!', spokojnie: 'Усе пораховано. Склад може спати спокійно.',
-    czekaNaSiec: 'Надішлеться сам, коли iPad зловить Wi-Fi. До того часу не виходьте з облікового запису.',
+    czekaNaSiec: 'Надішлеться сам, коли ' + URZ.ua.m + ' зловить ' + URZ.ua.siec + '. До того часу не виходьте з облікового запису.',
     poprawLiczbe: 'Виправити число', wyloguj: 'Вийти', gotowe: 'Готово', trybPopr: function (t) { return 'Виправлення до 6:00 · підрахунок надіслано ' + t; },
     poprawkaZap: function (k, t) { return 'Виправлення збережено · ' + k + ', ' + t; }, zamkniete: 'Виправлення закрито о 6:00 — файл дня пішов далі.',
     naZywo: 'онлайн', brakSieci: 'немає мережі', wKolejceN: function (n) { return n + ' у черзі'; }, wysylam: 'надсилаю…',
@@ -778,14 +823,14 @@ var TX = {
     wszystkie: 'Усі ролі надіслано — файл дня і лист приблизно через 15 хв після останнього надсилання.',
     menu: 'Меню', zalogowany: 'увійшли як', pustyKoniec: 'Кінець списку', gotoweLiczenie: 'Усе пораховано — можна надсилати.',
     proba: 'ПРОБА', probaBaner: function (d) { return 'Проба: сьогоднішні числа не потрапляють у файл дня і в FIRMINO. Справжній підрахунок з ' + d + '.'; },
-    ladowanie: 'Завантажую…', bezPodpowiedzi: 'Немає мережі — рахуєте без підказки «вчора». Записи зачекають на iPad.',
+    ladowanie: 'Завантажую…', bezPodpowiedzi: 'Немає мережі — рахуєте без підказки «вчора». Записи зачекають ' + URZ.ua.w + '.',
     bDzien: 'Виправлення закрито о 6:00 — цей запис не пройшов.', bPozycja: 'Цієї позиції вже немає в цій ролі (зміна в SŁOWNIKU) — запис пропущено.',
     bIlosc: 'Число поза межами — запис пропущено.', bDostep: 'Обліковий запис без доступу до підрахунку — поговоріть з керівником.',
     bPuste: function (n) { return 'Підрахунок не надіслано: бракує ' + n + ' ' + lpUa(n, 'позиції', 'позицій', 'позицій') + '. Заповніть і надішліть ще раз.'; },
     bInny: function (m) { return 'Не збережено: ' + m; },
-    wylogujKolejka: function (n) { return 'На iPad чекає ' + n + ' ' + lpUa(n, 'запис', 'записи', 'записів') + ' на надсилання. Зачекайте на мережу — після виходу вони підуть лише тоді, коли ви знову увійдете.'; },
+    wylogujKolejka: function (n) { return URZ.ua.W + ' чекає ' + n + ' ' + lpUa(n, 'запис', 'записи', 'записів') + ' на надсилання. Зачекайте на мережу — після виходу вони підуть лише тоді, коли ви знову увійдете.'; },
     wylogujMimo: 'Все одно вийти', czekam: 'Чекаю на мережу',
-    nowaWersja: 'Нова версія', odswiezApp: 'Оновити застосунок', urzadzenie: 'Назва цього iPad', urzadzeniePodp: 'напр. iPad у холодильній камері — видно біля записів',
+    nowaWersja: 'Нова версія', odswiezApp: 'Оновити застосунок', urzadzenie: 'Назва цього ' + URZ.ua.d, urzadzeniePodp: URZ.ua.np + ' — видно біля записів',
     zmienOsobe: 'Змінити особу', spisDnia: 'Spis dnia', liczeSam: 'Рахую сам', wersja: 'Версія',
     twojaRola: 'Ваша роль', twojaRolaPod: 'Цей обліковий запис рахує лише цю роль. Інша роль — інший обліковий запис, у керівника.', nowyDzien: 'Новий день',
     bInnaRola: function (r) { return 'Цей обліковий запис рахує лише ' + (r ? 'роль: ' + r : 'свою роль') + ' — запис пропущено.'; },
@@ -937,7 +982,7 @@ function sesjaWygasla() {
   S.kn = null;
   S.ekran = 'start'; S.krok = 'pin'; S.pinOsoba = S.ja ? { login: S.ja.login, imie: S.ja.imie, dl: dlPin(S.ja.rola) } : null;
   if (!S.pinOsoba) S.krok = osobyUrz().length ? 'kto' : 'login';
-  S.pin = ''; S.pinBlad = 'Sesja wygasła — wpisz PIN jeszcze raz. Wpisy na iPadzie czekają.'; S.warstwa = null; rysuj();
+  S.pin = ''; S.pinBlad = 'Sesja wygasła — wpisz PIN jeszcze raz. Wpisy ' + URZ.pl.w + ' czekają.'; S.warstwa = null; rysuj();
 }
 
 // ============================================================
@@ -1115,7 +1160,7 @@ function htmlMotyw(l) {
 // ============================================================
 function htmlPolaczenie() {
   var T = tx(), q = mojaKolejka().length;
-  if (S.offline) return '<span class="pol" id="pol" data-stan="offline"><span class="kropka"></span><span class="pol-t">' + T.brakSieci + (q ? ' · ' + T.wKolejceN(q) : '') + '</span></span>';
+  if (S.offline) return '<span class="pol" id="pol" data-stan="offline"><span class="kropka"></span><span class="pol-t">' + T.brakSieci + (q ? ' · ' + (TEL ? q : T.wKolejceN(q)) : '') + '</span></span>';
   if (S.wysyla || q) return '<span class="pol" id="pol" data-stan="wysyla"><span class="kropka"></span><span class="pol-t">' + T.wysylam + '</span></span>';
   return '<span class="pol" id="pol" data-stan="ok"><span class="kropka"></span><span class="pol-t">' + T.naZywo + '</span></span>';
 }
@@ -1156,7 +1201,7 @@ function htmlKafelki() {
 function htmlLogin() {
   return '<form class="logowanie" data-form="login" autocomplete="off">' +
     '<label class="pole-l"><span class="etykieta">Twój login · Ваш логін</span><input class="pole" id="login" value="' + esc(S.loginTxt) + '" placeholder="np. ania" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" maxlength="60"></label>' +
-    '<span class="pod-t">Login i PIN dostajesz od kierownika. Na tym iPadzie wpiszesz login tylko raz, potem wystarczy kafelek.<br>Логін і PIN дає керівник. На цьому iPad логін вводите лише раз, далі — плитка з ім’ям.</span>' +
+    '<span class="pod-t">Login i PIN dostajesz od kierownika. Na tym ' + URZ.pl.ms + ' wpiszesz login tylko raz, potem wystarczy kafelek.<br>Логін і PIN дає керівник. На цьому ' + URZ.ua.ms + ' логін вводите лише раз, далі — плитка з ім’ям.</span>' +
     '<button type="submit" class="glowny"' + (S.loginTxt.trim() ? '' : ' disabled') + ' id="loginDalej">Dalej · Далі</button>' +
     (osobyUrz().length ? '<button type="button" class="drugi" data-a="doKafelkow">Wróć do listy osób</button>' : '') + '</form>';
 }
@@ -1636,7 +1681,7 @@ function htmlMenu() {
   var q = mojaKolejka().length;
   if (q) t += '<div class="info-uw">' + I.kolejka + '<span>' + esc(T.wKolejceN(q)) + ' — ' + esc(T.wKolejce) + '</span></div>';
   t += '<div class="przyc-rzad"><button type="button" class="drugi maly" data-a="przeladuj">' + esc(T.odswiezApp) + '</button></div>';
-  t += '<span class="wersja-t">' + esc(T.wersja) + ' ' + esc(WERSJA) + (proba() ? ' · ' + esc(T.proba) : '') + ' · o 4:00 iPad sam wyloguje osobę</span>';
+  t += '<span class="wersja-t">' + esc(T.wersja) + ' ' + esc(WERSJA) + (proba() ? ' · ' + esc(T.proba) : '') + ' · o 4:00 ' + URZ.pl.m + ' sam wyloguje osobę</span>';
   return arkusz(T.menu, '', t, '<button type="button" class="drugi" data-a="wyloguj" style="flex:1">' + esc(T.wyloguj) + '</button>', { boczny: true });
 }
 function htmlListaArk() {
@@ -1658,7 +1703,7 @@ function htmlHistoria(k, kier, zPowrotem) {
       S.hist.dni.forEach(function (d, i) { var j = dni.indexOf(d); if (j >= 0) { wart[j] = hw[i] == null ? null : +hw[i]; wysl[j] = S.hist.wyslano ? czasZ(S.hist.wyslano[i]) : null; } });
     }
     if (ht && ht.dane) (ht.dane.dni || []).forEach(function (x) { if (x.rola !== r) return; var j = dni.indexOf(String(x.dzien).slice(0, 10)); if (j >= 0) { wart[j] = x.ilosc == null ? null : +x.ilosc; zrodla[j] = x.zrodlo; } });
-    // dziś: wpisy z bazy (z podpisem) + niewysłane z kolejki tego iPada
+    // dziś: wpisy z bazy (z podpisem) + niewysłane z kolejki tego urządzenia
     var dzis = ht && ht.dane ? (ht.dane.wpisy || []).filter(function (e) { return e.rola === r; }).map(function (e) { return { v: +e.ilosc, kto: e.kto, t: czasZ(e.kiedy), po: !!e.po_wyslaniu, ok: !!e.potwierdzone }; }) : [];
     Q.forEach(function (el) { if (el.fn === 'spis_zapisz' && el.a.p_rola === r && el.a.p_kod === k && el.a.p_dzien === S.dzien) dzis.push({ v: +el.a.p_ilosc, kto: el.imie, t: el.t, po: !!wyslaneRoli(r), ok: !!el.a.p_potwierdzone, q: true }); });
     dzis.sort(function (a, b) { return a.t - b.t; });
@@ -1765,7 +1810,7 @@ function htmlKontaNowe() {
       '<span class="etykieta">Login</span><b class="kn-duze" id="knWynikLogin">' + esc(w.login) + '</b>' +
       '<span class="etykieta">PIN</span><b class="kn-duze" id="knWynikPin">' + esc(w.pin) + '</b></div>' +
       '<p>Przekaż login i PIN tej osobie — najlepiej na kartce. PIN-u nie da się potem odczytać; w razie potrzeby nadasz nowy.</p>' +
-      '<p>Pierwsze logowanie na iPadzie: „Inna osoba” → login → PIN. Potem wystarczy kafelek z imieniem.</p>' +
+      '<p>Pierwsze logowanie (telefon albo iPad): „Inna osoba” → login → PIN. Potem wystarczy kafelek z imieniem.</p>' +
       '<button type="button" class="glowny" data-a="knNastepne">Następne konto</button>';
   }
   return '<h2>Nowe konto spisu</h2>' +
