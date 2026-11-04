@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="spis-wersja" content="2026-11-01.1940">
+<meta name="spis-wersja" content="2026-11-04.2153">
 <meta name="theme-color" content="#0B0F0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -456,8 +456,8 @@ a.drugi{text-decoration:none;color:var(--tekst)}
 
 // ============================================================
 // SPIS — inwentaryzacja dzienna (magazyn.dysza.app)
-// Ta sama baza Supabase co Tablica Mocy. Konta spisu (jedna rola na konto) zakłada kierownik w „Konta spisu”;
-// kierownik i szef zmiany liczą kontem z Tablicy (wszystkie role). Wpisy idą od razu do bazy przez kolejkę
+// Ta sama baza Supabase co Tablica Mocy. Konta spisu zakłada kierownik w „Konta spisu”; spisy kont osób z kartoteki
+// (także kilka spisów jednej osoby) ustawia manager.dysza.app; kierownik i szef zmiany liczą kontem z Tablicy (wszystkie role). Wpisy idą od razu do bazy przez kolejkę
 // na urządzeniu (brak sieci w chłodni niczego nie gubi). Plik dnia, maile i RW robi automat (Inwentaryzacja 3.4).
 // ============================================================
 var KONF = window.__SPIS_KONFIG__ || {};
@@ -781,7 +781,7 @@ var TX = {
     wylogujMimo: 'Wyloguj mimo to', czekam: 'Czekam na sieć',
     nowaWersja: 'Nowa wersja', odswiezApp: 'Odśwież aplikację', urzadzenie: 'Nazwa tego ' + URZ.pl.d, urzadzeniePodp: URZ.pl.np + ' — widać ją przy wpisach',
     zmienOsobe: 'Zmień osobę', spisDnia: 'Spis dnia', liczeSam: 'Liczę sam', wersja: 'Wersja',
-    twojaRola: 'Twoja rola', twojaRolaPod: 'To konto liczy tylko tę rolę. Inna rola to inne konto — u kierownika.', nowyDzien: 'Nowy dzień',
+    twojaRola: 'Twoja rola', twojaRolaPod: 'To konto liczy tylko tę rolę. Kolejny spis dopisze kierownik w managerze.', nowyDzien: 'Nowy dzień',
     bInnaRola: function (r) { return 'To konto liczy tylko ' + (r ? 'rolę: ' + r : 'swoją rolę') + ' — wpis pominięty.'; },
     rolaZmieniona: function (r) { return 'Kierownik zmienił Twoją rolę — teraz liczysz: ' + r + '.'; }
   },
@@ -832,7 +832,7 @@ var TX = {
     wylogujMimo: 'Все одно вийти', czekam: 'Чекаю на мережу',
     nowaWersja: 'Нова версія', odswiezApp: 'Оновити застосунок', urzadzenie: 'Назва цього ' + URZ.ua.d, urzadzeniePodp: URZ.ua.np + ' — видно біля записів',
     zmienOsobe: 'Змінити особу', spisDnia: 'Spis dnia', liczeSam: 'Рахую сам', wersja: 'Версія',
-    twojaRola: 'Ваша роль', twojaRolaPod: 'Цей обліковий запис рахує лише цю роль. Інша роль — інший обліковий запис, у керівника.', nowyDzien: 'Новий день',
+    twojaRola: 'Ваша роль', twojaRolaPod: 'Цей обліковий запис рахує лише цю роль. Ще одну роль додасть керівник у менеджері.', nowyDzien: 'Новий день',
     bInnaRola: function (r) { return 'Цей обліковий запис рахує лише ' + (r ? 'роль: ' + r : 'свою роль') + ' — запис пропущено.'; },
     rolaZmieniona: function (r) { return 'Керівник змінив вашу роль — тепер ви рахуєте: ' + r + '.'; }
   }
@@ -1823,10 +1823,10 @@ function htmlKontaNowe() {
     '<span class="blad-t" id="knBlad" role="alert">' + esc(k.bladF) + '</span>' +
     '<button type="button" class="glowny" data-a="knZaloz"' + (k.prac ? ' disabled' : '') + '>' + (k.prac ? 'Zakładam…' : 'Załóż konto') + '</button>';
 }
-function wierszKonta(x) {
+function wierszKonta(x, r) {
   var stan = x.aktywny ? (x.ostatnio ? 'ostatnio ' + kiedyKr(czasZ(x.ostatnio)) : 'jeszcze się nie logował(a)') : 'zablokowane · ' + ROLE[x.rola].pl;
   return '<button type="button" class="kn-osoba' + (x.aktywny ? '' : ' zabl') + '" data-a="knEdytuj" data-v="' + esc(x.id) + '"><span class="awatar">' + esc((x.imie || x.login).charAt(0).toUpperCase()) + '</span>' +
-    '<span class="t"><b>' + esc(x.imie) + (x.jezyk === 'ua' ? ' <span class="znacznik">UA</span>' : '') + '</b><small>' + esc(x.login + ' · ' + stan) + '</small></span>' +
+    '<span class="t"><b>' + esc(x.imie) + (x.jezyk === 'ua' ? ' <span class="znacznik">UA</span>' : '') + (r && r !== x.rola ? ' <span class="znacznik">też</span>' : '') + '</b><small>' + esc(x.login + ' · ' + stan) + '</small></span>' +
     '<span class="kn-zmien">Zmień</span></button>';
 }
 function htmlKontaLista() {
@@ -1835,17 +1835,17 @@ function htmlKontaLista() {
   if (!k.lista) return '<p class="hist-ladowanie">Wczytuję konta…</p>';
   var akt = k.lista.filter(function (x) { return x.aktywny; }), zabl = k.lista.filter(function (x) { return !x.aktywny; });
   var h = KOL_ROL.map(function (r) {
-    var os = akt.filter(function (x) { return x.rola === r; });
+    var os = akt.filter(function (x) { return x.rola === r || (x.role_dodatkowe || []).indexOf(r) >= 0; });   // kilka spisów (spis_006)
     return '<div class="kn-grupa" style="--kol:var(--' + r + ')" data-knrola="' + r + '"><div class="kn-gnag"><span class="kn-kw"></span><b>' + esc(ROLE[r].pl) + '</b><span>' + (os.length ? os.length : 'brak konta') + '</span></div>' +
-      os.map(wierszKonta).join('') + '</div>';
+      os.map(function (x) { return wierszKonta(x, r); }).join('') + '</div>';
   }).join('');
-  if (zabl.length) h += '<div class="kn-grupa" data-knrola="zablokowane"><div class="kn-gnag"><b>Zablokowane</b><span>' + zabl.length + '</span></div>' + zabl.map(wierszKonta).join('') + '</div>';
+  if (zabl.length) h += '<div class="kn-grupa" data-knrola="zablokowane"><div class="kn-gnag"><b>Zablokowane</b><span>' + zabl.length + '</span></div>' + zabl.map(function (x) { return wierszKonta(x); }).join('') + '</div>';
   return h;
 }
 function htmlKonta() {
   return htmlNaglowek({ tytul: 'KONTA' }) +
     '<div class="przew"><div class="kn-w">' +
-    '<div class="sd-gora"><div><h1 class="h1">Konta spisu</h1><p class="pod">Każde konto liczy tylko jedną rolę — innej nie policzy, bo nie przepuści tego baza. Kierownik i szef zmiany liczą swoim kontem z Tablicy.</p></div>' +
+    '<div class="sd-gora"><div><h1 class="h1">Konta spisu</h1><p class="pod">Konto liczy tylko swoje spisy — innych nie przepuści baza. Spisy osób z kartoteki ustawia kierownik w manager.dysza.app (tam też kilka spisów jednej osoby). Kierownik i szef zmiany liczą swoim kontem z Tablicy.</p></div>' +
     '<button type="button" class="drugi" data-a="spisDnia">' + I.wstecz + 'Spis dnia</button></div>' +
     '<div class="kn-siatka"><section class="karta-b kn-nowe" id="kn-nowe">' + htmlKontaNowe() + '</section>' +
     '<section class="karta-b"><div class="kn-lnag"><h2>Konta</h2><button type="button" class="link" data-a="knOdswiez">Odśwież</button></div>' +
